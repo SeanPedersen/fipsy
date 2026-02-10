@@ -1,0 +1,14 @@
+[project]
+name = "fipsy"
+version = "0.1.0"
+description = "IPFS content sharing and discovery CLI"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["click>=8.0"]
+
+[project.scripts]
+fipsy = "fipsy.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
