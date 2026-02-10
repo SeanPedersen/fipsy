@@ -41,7 +41,7 @@ def scan() -> None:
         return
 
     for peer_id, ipns_keys in results:
-        click.echo(f"Peer {peer_id[:16]}...")
+        click.echo(f"Peer Index: https://ipfs.io/ipns/{peer_id}")
         for name, key_id in ipns_keys.items():
             click.echo(f"  {name}: https://ipfs.io/ipns/{key_id}")
         click.echo()
@@ -52,7 +52,11 @@ def _fetch_peer_index(peer_id: str) -> tuple[str, dict[str, str]] | None:
     try:
         raw = ipfs.cat_path(f"/ipns/{peer_id}/index.json")
         data = json.loads(raw)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ):
         return None
 
     ipns_keys = data.get("ipns", {})
@@ -177,11 +181,13 @@ def _write_index_html(directory: str, keys: dict[str, str]) -> None:
             f'    <li><a href="https://ipfs.io/ipns/{key_id}">{name}</a> '
             f"<code>{key_id}</code></li>"
         )
-    lines.extend([
-        "  </ul>",
-        "</body>",
-        "</html>",
-    ])
+    lines.extend(
+        [
+            "  </ul>",
+            "</body>",
+            "</html>",
+        ]
+    )
     path = os.path.join(directory, "index.html")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
