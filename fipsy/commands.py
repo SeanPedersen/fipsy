@@ -137,7 +137,7 @@ def publish() -> None:
         click.echo(f"CID: {cid}")
 
         click.echo("Publishing discovery index under self...")
-        ipfs.name_publish(cid, lifetime="1m")
+        ipfs.name_publish(cid)
 
         nid = ipfs.node_id()
         click.echo(f"\nDiscoverable via:")
