@@ -55,7 +55,7 @@ def swarm_peers() -> list[str]:
     if not output:
         return []
     # Each line is a multiaddr like /ip4/.../p2p/<peer_id>
-    return [line.rstrip("/").split("/")[-1] for line in output.splitlines()]
+    return list({line.rstrip("/").split("/")[-1] for line in output.splitlines()})
 
 
 DEFAULT_CAT_TIMEOUT = 5
