@@ -90,11 +90,14 @@ def name_publish(
     cid: str,
     key: str | None = None,
     lifetime: str | None = None,
+    ttl: str | None = None,
 ) -> str:
     args = ["name", "publish"]
     if key:
         args.append(f"--key={key}")
     if lifetime:
         args.append(f"--lifetime={lifetime}")
+    if ttl:
+        args.append(f"--ttl={ttl}")
     args.append(f"/ipfs/{cid}")
     return run_ipfs(*args)

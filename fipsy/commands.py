@@ -112,7 +112,7 @@ def add(dir_path: str) -> None:
     click.echo(f"https://ipfs.io/ipfs/{cid}")
 
     click.echo(f"Publishing under IPNS key: {key_name}...")
-    ipfs.name_publish(cid, key=key_name)
+    ipfs.name_publish(cid, key=key_name, ttl="1m")
 
     keys = ipfs.key_list()
     ipns_hash = keys.get(key_name, "")
@@ -141,7 +141,7 @@ def publish() -> None:
         click.echo(f"CID: {cid}")
 
         click.echo("Publishing discovery index under self...")
-        ipfs.name_publish(cid)
+        ipfs.name_publish(cid, ttl="1m")
 
         nid = ipfs.node_id()
         click.echo(f"\nDiscoverable via:")
