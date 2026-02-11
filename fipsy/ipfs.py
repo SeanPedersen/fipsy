@@ -109,3 +109,14 @@ def name_publish(
         args.append(f"--ttl={ttl}")
     args.append(f"/ipfs/{cid}")
     return run_ipfs(*args)
+
+
+def pin_add(cid: str, recursive: bool = True) -> str:
+    """Pin a CID to local storage."""
+    args = ["pin", "add"]
+    if recursive:
+        args.append("--recursive=true")
+    else:
+        args.append("--recursive=false")
+    args.append(cid)
+    return run_ipfs(*args)

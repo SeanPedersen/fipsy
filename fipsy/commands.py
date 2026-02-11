@@ -250,3 +250,34 @@ def _write_index_html(directory: str, keys: dict[str, str]) -> None:
     path = os.path.join(directory, "index.html")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
+
+
+@click.command()
+@click.argument("keys", nargs=-1, required=True)
+def pin(keys: tuple[str, ...]) -> None:
+    """Pin IPNS keys to local storage.
+
+    Resolves each IPNS key hash to its current CID and pins recursively.
+    Use the key hashes from `fipsy scan` output.
+
+    Example: fipsy pin k2k4r8nrj... ipns://k51qzi...
+    """
+    ensure_ipfs()
+
+    for key_id in keys:
+        # Strip ipns:// prefix if present
+        if key_id.startswith("ipns://"):
+            key_id = key_id[7:]
+        click.echo(f"Resolving ipns://{key_id}...")
+        resolved = _resolve_key(key_id)
+        if not resolved:
+            click.echo(f"  Failed to resolve, skipping.")
+            continue
+
+        cid = resolved.split("/")[-1]
+        click.echo(f"Pinning ipfs://{cid}...")
+        try:
+            ipfs.pin_add(cid)
+            click.echo(f"  Pinned.")
+        except subprocess.CalledProcessError:
+            click.echo(f"  Failed to pin.")

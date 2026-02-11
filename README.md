@@ -2,6 +2,8 @@
 
 A useful Python CLI for using IPFS to share and discover content.
 
+Start your daemon with pubsub IPNS sync enabled (for faster sync): $ ipfs daemon --enable-namesys-pubsub
+
 ## fipsy scan
 
 Discover Self Index of Peers
@@ -10,6 +12,14 @@ This works in a local network - allowing true decentralized networking.
 Show connected nodes (returns list of $NODE_ID): ipfs swarm peers
 Discover public self IPNS content of node: ipfs ls /ipns/$NODE_ID
 Show index: ipfs cat /ipns/$NODE_ID/index.json
+
+## fipsy pin $IPNS_KEY...
+
+Pin discovered IPNS keys to local storage. Resolves each key to its current CID and pins recursively.
+
+```bash
+fipsy pin k2k4r8nrj... ipns://k51qzi...
+```
 
 ## fipsy add $DIR_PATH
 
