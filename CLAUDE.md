@@ -63,7 +63,7 @@ published (
 
 ## Conventions
 
-- IPNS records use 1-minute TTL, RSA-2048 keys
+- IPNS records use 1-minute TTL
 - Directory basename is default IPNS key name, user prompted to confirm/change
 - `DEFAULT_CAT_TIMEOUT = 5s` for fetching peer content
 - `DEFAULT_RESOLVE_TIMEOUT = 10s` for IPNS resolution (DHT lookups are slow)

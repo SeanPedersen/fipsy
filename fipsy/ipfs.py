@@ -78,7 +78,7 @@ def key_list() -> dict[str, str]:
 
 
 def key_gen(name: str) -> str:
-    return run_ipfs("key", "gen", name, "--type=rsa", "--size=2048")
+    return run_ipfs("key", "gen", name)
 
 
 def add_directory(dir_path: str) -> str:
