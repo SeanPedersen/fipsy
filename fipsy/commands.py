@@ -241,8 +241,8 @@ def publish() -> None:
     # Track successfully published keys for the index
     published_keys: dict[str, str] = {}
     for entry in published:
-        key = entry["name"]
-        path = Path(entry["path"])
+        key = entry["key"]
+        path = Path(entry["key"])
         ipns_name = keys.get(key)
         if not ipns_name:
             click.echo(f"  {key}: skipped (IPNS name not found)")
