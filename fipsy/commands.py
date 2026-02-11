@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import click
 
-from fipsy import ipfs
+from fipsy import db, ipfs
 
 DISCOVERY_DIR_NAME = ".ipns-index"
 
@@ -23,8 +23,18 @@ def ensure_ipfs() -> None:
         click.echo("IPFS daemon started.")
 
 
+def _pin_cid(cid: str) -> bool:
+    """Pin a CID recursively. Returns True on success."""
+    try:
+        ipfs.pin_add(cid)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 @click.command()
-def scan() -> None:
+@click.option("--pin", is_flag=True, help="Pin discovered content.")
+def scan(pin: bool) -> None:
     """Discover content published by local IPFS peers.
 
     Tip: Enable IPNS-over-PubSub on both nodes for near-instant discovery:
@@ -32,6 +42,7 @@ def scan() -> None:
         ipfs daemon --enable-namesys-pubsub
     """
     ensure_ipfs()
+    db.init_db()
 
     peers = ipfs.swarm_peers()
     if not peers:
@@ -47,13 +58,21 @@ def scan() -> None:
 
     for peer_id, ipns_keys in results:
         click.echo(f"Peer Index: ipns://{peer_id}")
+        db.upsert_discovered(peer_id, peer_id)  # index: key=node_id, name=NULL
         for name, (key_id, resolved) in ipns_keys.items():
             if resolved:
                 cid = resolved.split("/")[-1]
                 click.echo(f"  {name} (IPNS): ipns://{key_id}")
                 click.echo(f"  {name} (IPFS): ipfs://{cid}")
+                if pin:
+                    if _pin_cid(cid):
+                        click.echo(f"  {name}: pinned")
+                    else:
+                        click.echo(f"  {name}: pin failed")
+                db.upsert_discovered(peer_id, key_id, name=name)
             else:
                 click.echo(f"  {name}: unresolved... (ipns://{key_id})")
+                db.upsert_discovered(peer_id, key_id, name=name)
         click.echo()
 
 
@@ -142,16 +161,37 @@ def _publish_keys(keys: dict[str, str]) -> None:
 
 @click.command()
 def index() -> None:
-    """List all local IPNS keys with clickable links."""
+    """List local and discovered IPNS keys."""
     ensure_ipfs()
+    db.init_db()
 
+    # Local keys
     keys = ipfs.key_list()
-    if not keys:
-        click.echo("No IPNS keys found.")
-        return
+    if keys:
+        click.echo("Local keys:")
+        for name, key_id in keys.items():
+            click.echo(f"  {name}: ipns://{key_id}")
+    else:
+        click.echo("No local IPNS keys.")
 
-    for name, key_id in keys.items():
-        click.echo(f"  {name}: ipns://{key_id}")
+    # Discovered keys
+    discovered = db.list_discovered()
+    if discovered:
+        click.echo("\nDiscovered keys:")
+        pinned_cids = ipfs.pin_ls()
+
+        # Group by node_id
+        peers: dict[str, list[dict]] = {}
+        for row in discovered:
+            peers.setdefault(row["node_id"], []).append(row)
+
+        for node_id, rows in peers.items():
+            click.echo(f"  Peer: {node_id}")
+            for row in rows:
+                pinned = ipfs.is_pinned(row["ipns_key"], pinned_cids)
+                pin_marker = " [pinned]" if pinned else ""
+                name = row["name"] or "(index)"
+                click.echo(f"    {name}: ipns://{row['ipns_key']}{pin_marker}")
 
 
 @click.command()
@@ -252,32 +292,3 @@ def _write_index_html(directory: str, keys: dict[str, str]) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-@click.command()
-@click.argument("keys", nargs=-1, required=True)
-def pin(keys: tuple[str, ...]) -> None:
-    """Pin IPNS keys to local storage.
-
-    Resolves each IPNS key hash to its current CID and pins recursively.
-    Use the key hashes from `fipsy scan` output.
-
-    Example: fipsy pin k2k4r8nrj... ipns://k51qzi...
-    """
-    ensure_ipfs()
-
-    for key_id in keys:
-        # Strip ipns:// prefix if present
-        if key_id.startswith("ipns://"):
-            key_id = key_id[7:]
-        click.echo(f"Resolving ipns://{key_id}...")
-        resolved = _resolve_key(key_id)
-        if not resolved:
-            click.echo(f"  Failed to resolve, skipping.")
-            continue
-
-        cid = resolved.split("/")[-1]
-        click.echo(f"Pinning ipfs://{cid}...")
-        try:
-            ipfs.pin_add(cid)
-            click.echo(f"  Pinned.")
-        except subprocess.CalledProcessError:
-            click.echo(f"  Failed to pin.")

@@ -13,13 +13,13 @@ Show connected nodes (returns list of $NODE_ID): ipfs swarm peers
 Discover public self IPNS content of node: ipfs ls /ipns/$NODE_ID
 Show index: ipfs cat /ipns/$NODE_ID/index.json
 
-## fipsy pin $IPNS_KEY...
-
-Pin discovered IPNS keys to local storage. Resolves each key to its current CID and pins recursively.
+Use `--pin` to pin all discovered content:
 
 ```bash
-fipsy pin k2k4r8nrj... ipns://k51qzi...
+fipsy scan --pin
 ```
+
+Discovered keys are saved to `~/.config/fipsy/discovered.db` and shown by `fipsy index`.
 
 ## fipsy add $DIR_PATH
 
@@ -31,4 +31,4 @@ This creates an index of all your local IPNS keys and makes it publicly discover
 
 ## fipsy index
 
-Show your local public index
+Show your local IPNS keys and discovered keys from peers.

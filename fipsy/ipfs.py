@@ -120,3 +120,25 @@ def pin_add(cid: str, recursive: bool = True) -> str:
         args.append("--recursive=false")
     args.append(cid)
     return run_ipfs(*args)
+
+
+def pin_ls() -> set[str]:
+    """List all pinned CIDs."""
+    output = run_ipfs("pin", "ls", "--type=recursive", "-q")
+    if not output:
+        return set()
+    return set(output.splitlines())
+
+
+def is_pinned(ipns_key: str, pinned_cids: set[str] | None = None) -> bool:
+    """Check if an IPNS key's resolved content is pinned."""
+    if pinned_cids is None:
+        pinned_cids = pin_ls()
+    try:
+        resolved = name_resolve(ipns_key, timeout=5)
+        cid = resolved.split("/")[-1]
+        return cid in pinned_cids
+    except Exception:
+        return False
+
+
