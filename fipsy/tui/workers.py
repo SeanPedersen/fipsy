@@ -111,10 +111,11 @@ def _fetch_peer_index(peer_id: str, cat_timeout: float) -> ScanResult | None:
     return result
 
 
-def scan_peers_iter() -> Iterator[ScanResult | int]:
+def scan_peers_iter() -> Iterator[ScanResult | None | int]:
     """Scan peers, yielding results as they complete.
 
-    First yields the total peer count (int), then ScanResult objects.
+    First yields the total peer count (int), then ScanResult for peers with
+    an index or None for peers without one (to track progress).
     """
     peers = ipfs.swarm_peers()
     yield len(peers)
@@ -139,6 +140,8 @@ def scan_peers_iter() -> Iterator[ScanResult | int]:
                         result.peer_id, entry.ipns_name, name=entry.name
                     )
                 yield result
+            else:
+                yield None
 
 
 def pin_cid(cid: str) -> bool:

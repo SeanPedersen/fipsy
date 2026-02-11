@@ -39,17 +39,28 @@ class FipsyApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
         Binding("question_mark", "help", "Help", show=True),
-        Binding("s", "scan", "Scan", show=True),
-        Binding("a", "add_directory", "Add", show=True),
-        Binding("shift+p", "publish_all", "Publish", show=True),
-        Binding("p", "pin", "Pin", show=True),
-        Binding("d", "remove", "Remove", show=True),
-        Binding("o", "open_browser", "Open", show=True),
-        Binding("r", "refresh_browse", "Refresh", show=True),
+        # Discover tab
+        Binding("s", "scan", "Scan"),
+        Binding("p", "pin", "Pin"),
+        # My Content tab
+        Binding("a", "add_directory", "Add"),
+        Binding("d", "remove", "Remove"),
+        Binding("shift+p", "publish_all", "Publish"),
+        # Browse tab
+        Binding("o", "open_browser", "Open"),
+        Binding("r", "refresh_browse", "Refresh"),
     ]
+
+    TAB_ACTIONS: dict[str, set[str]] = {
+        "discover-tab": {"scan", "pin"},
+        "content-tab": {"add_directory", "remove", "publish_all"},
+        "browse-tab": {"open_browser", "refresh_browse", "pin"},
+    }
 
     def __init__(self) -> None:
         super().__init__()
+        self._ipfs_ready = False
+        self._active_tab = "discover-tab"
         self._scan_total = 0
         self._scan_done = 0
         self._publish_total = 0
@@ -57,23 +68,29 @@ class FipsyApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with TabbedContent("Network", "My Content", "Browse", id="tabs"):
-            with TabPane("Network", id="network-tab"):
+        with TabbedContent("Discover", "Browse", "My Content", id="tabs"):
+            with TabPane("Discover", id="discover-tab"):
                 yield Static("No peers scanned yet. Press [bold]s[/] to scan.", id="network-status", classes="status-bar")
                 yield PeerTable(id="peer-table")
                 with Vertical(id="scan-progress", classes="progress-container"):
                     yield ProgressBar(total=100, id="scan-bar")
+
+            with TabPane("Browse", id="browse-tab"):
+                yield Static("Press [bold]r[/] to refresh.", id="browse-status", classes="status-bar")
+                yield BrowseTable(id="browse-table")
 
             with TabPane("My Content", id="content-tab"):
                 yield Static("Press [bold]a[/] to add a directory.", id="content-status", classes="status-bar")
                 yield PublishedTable(id="published-table")
                 with Vertical(id="publish-progress", classes="progress-container"):
                     yield ProgressBar(total=100, id="publish-bar")
-
-            with TabPane("Browse", id="browse-tab"):
-                yield Static("Press [bold]r[/] to refresh.", id="browse-status", classes="status-bar")
-                yield BrowseTable(id="browse-table")
         yield Footer()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        tab_specific = set().union(*self.TAB_ACTIONS.values())
+        if action in tab_specific:
+            return action in self.TAB_ACTIONS.get(self._active_tab, set())
+        return True
 
     def on_mount(self) -> None:
         self._check_ipfs()
@@ -81,8 +98,10 @@ class FipsyApp(App):
     def _check_ipfs(self) -> None:
         installed, running = workers.check_ipfs()
         if not installed or not running:
+            self._ipfs_ready = False
             self.push_screen(IpfsErrorScreen(installed), self._on_ipfs_error_dismiss)
         else:
+            self._ipfs_ready = True
             db.init_db()
             self._load_published()
 
@@ -92,11 +111,21 @@ class FipsyApp(App):
         else:
             self.exit()
 
+    def _require_ipfs(self) -> bool:
+        """Guard for actions that need IPFS. Returns True if ready."""
+        if self._ipfs_ready:
+            return True
+        self.notify("IPFS daemon is not running", severity="error")
+        self._check_ipfs()
+        return False
+
     # ── Network Tab ──────────────────────────────────────────────
 
     def action_scan(self) -> None:
+        if not self._require_ipfs():
+            return
         tabs = self.query_one("#tabs", TabbedContent)
-        tabs.active = "network-tab"
+        tabs.active = "discover-tab"
         self._start_scan()
 
     def _start_scan(self) -> None:
@@ -126,10 +155,10 @@ class FipsyApp(App):
                 self.call_from_thread(self._scan_update_status, f"Scanning {item} peer(s)...")
             else:
                 self._scan_done += 1
-                self.call_from_thread(self._scan_add_result, item)
-                if self._scan_total > 0:
-                    pct = (self._scan_done / self._scan_total) * 100
-                    self.call_from_thread(self._scan_update_progress, pct)
+                pct = (self._scan_done / self._scan_total) * 100
+                self.call_from_thread(self._scan_update_progress, pct)
+                if item is not None:
+                    self.call_from_thread(self._scan_add_result, item)
 
         self.call_from_thread(self._scan_complete)
 
@@ -190,6 +219,8 @@ class FipsyApp(App):
             )
 
     def action_add_directory(self) -> None:
+        if not self._require_ipfs():
+            return
         tabs = self.query_one("#tabs", TabbedContent)
         tabs.active = "content-tab"
         self.push_screen(AddDirectoryScreen(), self._on_add_dismiss)
@@ -241,6 +272,8 @@ class FipsyApp(App):
         self.notify("Removed from published list")
 
     def action_publish_all(self) -> None:
+        if not self._require_ipfs():
+            return
         tabs = self.query_one("#tabs", TabbedContent)
         tabs.active = "content-tab"
 
@@ -305,10 +338,14 @@ class FipsyApp(App):
     # ── Browse Tab ───────────────────────────────────────────────
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        if event.pane.id == "browse-tab":
+        self._active_tab = event.pane.id
+        self.refresh_bindings()
+        if event.pane.id == "browse-tab" and self._ipfs_ready:
             self._refresh_browse()
 
     def action_refresh_browse(self) -> None:
+        if not self._require_ipfs():
+            return
         tabs = self.query_one("#tabs", TabbedContent)
         tabs.active = "browse-tab"
         self._refresh_browse()
@@ -339,11 +376,12 @@ class FipsyApp(App):
         status.update(f"{len(entries)} IPNS key(s)")
 
     def action_pin(self) -> None:
-        # Pin works on Network tab (pin by CID) or Browse tab (pin by IPNS)
+        if not self._require_ipfs():
+            return
         tabs = self.query_one("#tabs", TabbedContent)
         active = tabs.active
 
-        if active == "network-tab":
+        if active == "discover-tab":
             self._pin_from_network()
         elif active == "browse-tab":
             self._pin_from_browse()
@@ -417,7 +455,12 @@ class FipsyApp(App):
         self._open_ipns(ipns_name)
 
     def on_data_table_row_selected(self, event: BrowseTable.RowSelected) -> None:
-        if isinstance(event.data_table, BrowseTable):
+        if isinstance(event.data_table, PeerTable):
+            # Row key is "peer_id:ipns_name" — open the peer's index
+            key_str = str(event.row_key.value)
+            peer_id = key_str.split(":")[0]
+            self._open_ipns(peer_id)
+        elif isinstance(event.data_table, BrowseTable):
             ipns_name = str(event.row_key.value)
             self._open_ipns(ipns_name)
         elif isinstance(event.data_table, PublishedTable):
