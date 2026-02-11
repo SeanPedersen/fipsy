@@ -29,14 +29,27 @@ Entry point: `fipsy.main:cli` (defined in `pyproject.toml`)
 fipsy/
 ├── main.py       # Click group definition, registers subcommands
 ├── commands.py   # Subcommands (scan, add, index, publish) + business logic
-└── ipfs.py       # Pure wrappers around `ipfs` CLI binary (no business logic)
+├── ipfs.py       # Pure wrappers around `ipfs` CLI binary (no business logic)
+└── db.py         # SQLite storage for discovered IPNS keys
 ```
 
-**`ipfs.py`** — Stateless wrapper layer. All IPFS interaction goes through `run_ipfs()` which calls `subprocess.run`. Functions: daemon management, swarm peers, cat, key operations, add, name publish, name resolve.
+**`ipfs.py`** — Stateless wrapper layer. All IPFS interaction goes through `run_ipfs()` which calls `subprocess.run`. Functions: daemon management, swarm peers, cat, key operations, add, name publish, name resolve, pin add/ls.
+
+**`db.py`** — SQLite storage at `~/.config/fipsy/discovered.db`. Schema:
+```sql
+discovered (
+    node_id TEXT NOT NULL,    -- peer's node ID
+    ipns_key TEXT NOT NULL,   -- IPNS key (= node_id for index, else key hash)
+    name TEXT,                -- NULL for peer index, else key name
+    PRIMARY KEY (node_id, ipns_key)
+)
+```
 
 **`commands.py`** — Business logic layer. Uses `ThreadPoolExecutor` for concurrent peer scanning and IPNS resolution. Generates JSON + HTML index files in a temp directory for the `publish` command. Filters out "self" key from published indexes.
 
-**Key flow — `scan`**: swarm_peers → concurrent `cat /ipns/{peer}/index.json` for each peer → concurrent `name resolve --recursive` for each discovered IPNS key → display resolved CIDs.
+**Key flow — `scan`**: swarm_peers → concurrent `cat /ipns/{peer}/index.json` for each peer → concurrent `name resolve --recursive` for each discovered IPNS key → save to SQLite → display resolved CIDs. Use `--pin` to pin discovered content.
+
+**Key flow — `index`**: list local keys + query SQLite for discovered keys → check pinned status by resolving IPNS keys and checking against `ipfs pin ls`.
 
 **Key flow — `publish`**: list keys → add each directory from cwd → create temp index (JSON+HTML) → add to IPFS → publish under "self" IPNS key.
 
@@ -46,4 +59,5 @@ fipsy/
 - Directory names are used as IPNS key names
 - `DEFAULT_CAT_TIMEOUT = 5s` for fetching peer content
 - `DEFAULT_RESOLVE_TIMEOUT = 10s` for IPNS resolution (DHT lookups are slow)
-- Discovery index stored at `.ipns-index/` (gitignored)
+- Discovered keys stored in `~/.config/fipsy/discovered.db`
+- Pinned status is inferred from IPFS at runtime, not stored in DB
