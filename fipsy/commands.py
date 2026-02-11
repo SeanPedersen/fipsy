@@ -172,8 +172,8 @@ def index() -> None:
     ensure_ipfs()
     db.init_db()
 
-    # Build lookup from published table: name -> path
-    published_paths = {entry["name"]: entry["path"] for entry in db.list_published()}
+    # Build lookup from published table: key -> path
+    published_paths = {entry["key"]: entry["path"] for entry in db.list_published()}
 
     # Local keys
     keys = ipfs.key_list()
