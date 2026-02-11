@@ -25,7 +25,12 @@ def ensure_ipfs() -> None:
 
 @click.command()
 def scan() -> None:
-    """Discover content published by local IPFS peers."""
+    """Discover content published by local IPFS peers.
+
+    Tip: Enable IPNS-over-PubSub on both nodes for near-instant discovery:
+
+        ipfs daemon --enable-namesys-pubsub
+    """
     ensure_ipfs()
 
     peers = ipfs.swarm_peers()
@@ -205,7 +210,7 @@ def publish() -> None:
         ipfs.name_publish(cid, ttl="1m")
 
         nid = ipfs.node_id()
-        click.echo(f"\nDiscoverable via:")
+        click.echo("\nDiscoverable via:")
         click.echo(f"  ipfs ls /ipns/{nid}")
         click.echo(f"  ipfs cat /ipns/{nid}/index.json")
         click.echo(f"  https://ipfs.io/ipns/{nid}")
