@@ -77,6 +77,31 @@ def _fetch_peer_indexes(peers: list[str]) -> list[tuple[str, dict[str, str]]]:
     return results
 
 
+def _publish_key(name: str, dir_path: str) -> str | None:
+    """Add directory and publish under IPNS key. Returns CID on success."""
+    try:
+        cid = ipfs.add_directory(dir_path)
+        ipfs.name_publish(cid, key=name, ttl="1m")
+        return cid
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _publish_keys(keys: dict[str, str]) -> None:
+    """Publish all IPNS keys by adding their directories from cwd."""
+    cwd = os.getcwd()
+    for name, key_id in keys.items():
+        dir_path = os.path.join(cwd, name)
+        if not os.path.isdir(dir_path):
+            click.echo(f"  {name}: skipped (directory not found)")
+            continue
+        cid = _publish_key(name, dir_path)
+        if cid:
+            click.echo(f"  {name}: published ({cid[:12]}...)")
+        else:
+            click.echo(f"  {name}: failed")
+
+
 @click.command()
 def index() -> None:
     """List all local IPNS keys with clickable links."""
@@ -130,6 +155,10 @@ def publish() -> None:
     if not published_keys:
         click.echo("No IPNS keys found (besides self). Use `fipsy add` first.")
         return
+
+    # Publish all IPNS keys by adding directories from cwd
+    click.echo(f"Publishing {len(published_keys)} IPNS key(s)...")
+    _publish_keys(published_keys)
 
     discovery_dir = tempfile.mkdtemp(prefix="fipsy-index-")
     try:
