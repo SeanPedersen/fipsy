@@ -46,14 +46,14 @@ def scan() -> None:
         return
 
     for peer_id, ipns_keys in results:
-        click.echo(f"Peer Index: https://ipfs.io/ipns/{peer_id}")
+        click.echo(f"Peer Index: ipns://{peer_id}")
         for name, (key_id, resolved) in ipns_keys.items():
             if resolved:
                 cid = resolved.split("/")[-1]
-                click.echo(f"  {name} (IPNS): https://ipfs.io/ipns/{key_id}")
-                click.echo(f"  {name} (IPFS): https://ipfs.io/ipfs/{cid}")
+                click.echo(f"  {name} (IPNS): ipns://{key_id}")
+                click.echo(f"  {name} (IPFS): ipfs://{cid}")
             else:
-                click.echo(f"  {name}: unresolved... (https://ipfs.io/ipns/{key_id})")
+                click.echo(f"  {name}: unresolved... (ipns://{key_id})")
         click.echo()
 
 
@@ -150,7 +150,7 @@ def index() -> None:
         return
 
     for name, key_id in keys.items():
-        click.echo(f"  {name}: https://ipfs.io/ipns/{key_id}")
+        click.echo(f"  {name}: ipns://{key_id}")
 
 
 @click.command()
@@ -171,14 +171,14 @@ def add(dir_path: str) -> None:
     click.echo(f"Adding {dir_path} to IPFS...")
     cid = ipfs.add_directory(dir_path)
     click.echo(f"CID: {cid}")
-    click.echo(f"https://ipfs.io/ipfs/{cid}")
+    click.echo(f"ipfs://{cid}")
 
     click.echo(f"Publishing under IPNS key: {key_name}...")
     ipfs.name_publish(cid, key=key_name, ttl="1m")
 
     keys = ipfs.key_list()
     ipns_hash = keys.get(key_name, "")
-    click.echo(f"https://ipfs.io/ipns/{ipns_hash}")
+    click.echo(f"ipns://{ipns_hash}")
 
 
 @click.command()
@@ -213,7 +213,7 @@ def publish() -> None:
         click.echo("\nDiscoverable via:")
         click.echo(f"  ipfs ls /ipns/{nid}")
         click.echo(f"  ipfs cat /ipns/{nid}/index.json")
-        click.echo(f"  https://ipfs.io/ipns/{nid}")
+        click.echo(f"  ipns://{nid}")
     finally:
         shutil.rmtree(discovery_dir, ignore_errors=True)
 
@@ -244,8 +244,7 @@ def _write_index_html(directory: str, keys: dict[str, str]) -> None:
     ]
     for name, key_id in keys.items():
         lines.append(
-            f'    <li><a href="https://ipfs.io/ipns/{key_id}">{name}</a> '
-            f"<code>{key_id}</code></li>"
+            f'    <li><a href="ipns://{key_id}">{name}</a> <code>{key_id}</code></li>'
         )
     lines.extend(
         [
