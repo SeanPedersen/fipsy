@@ -40,6 +40,10 @@ Discovered keys are saved to `~/.config/fipsy/discovered.db` and shown by `fipsy
 
 Show your local IPNS keys and discovered keys from peers.
 
+## NextUp
+
+Make it a GUI (Tauri app) which runs in background just like the IPFS daemon, searching for peers sharing content periodically (notifying you if an index is found). Let's you share, browse and pin files found in indices from local peers.
+
 ## References
 
 - <ipns://k2k4r8nrj3ghk8ymc70o9vvkzusiyncbmflw85ctv3j1ktrhddwh7nvu/posts/ipfs/>
