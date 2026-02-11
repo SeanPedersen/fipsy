@@ -11,3 +11,4 @@ wheels/
 
 # Fipsy temp files
 .ipns-index/
+test/
