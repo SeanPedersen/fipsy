@@ -39,14 +39,14 @@ fipsy/
 ```sql
 discovered (
     node_id TEXT NOT NULL,    -- peer's node ID
-    ipns_key TEXT NOT NULL,   -- IPNS key (= node_id for index, else key hash)
+    ipns_name TEXT NOT NULL,  -- IPNS name (= node_id for index, else key hash)
     name TEXT,                -- NULL for peer index, else key name
-    PRIMARY KEY (node_id, ipns_key)
+    PRIMARY KEY (node_id, ipns_name)
 )
 
 published (
     path TEXT PRIMARY KEY,    -- absolute path to directory
-    name TEXT NOT NULL,       -- IPNS key name
+    key TEXT NOT NULL,        -- local IPFS key name
     added TEXT NOT NULL       -- ISO timestamp when added
 )
 ```
@@ -55,7 +55,7 @@ published (
 
 **Key flow — `scan`**: swarm_peers → concurrent `cat /ipns/{peer}/index.json` for each peer → concurrent `name resolve --recursive` for each discovered IPNS key → save to SQLite → display resolved CIDs. Use `--pin` to pin discovered content.
 
-**Key flow — `add`**: prompt for name (default: directory basename) → create IPNS key if needed → add directory to IPFS → publish under IPNS key → store path/name in `published` table.
+**Key flow — `add`**: prompt for name (default: directory basename) → create IPNS key if needed → add directory to IPFS → publish under IPNS key → store path/key in `published` table.
 
 **Key flow — `index`**: list local keys (showing paths from `published` table) + query SQLite for discovered keys → check pinned status by resolving IPNS keys and checking against `ipfs pin ls`. Shows "(index)" for self key.
 

@@ -59,27 +59,27 @@ def scan(pin: bool) -> None:
     for peer_id, ipns_keys in results:
         click.echo(f"Peer Index: ipns://{peer_id}")
         db.upsert_discovered(peer_id, peer_id)  # index: key=node_id, name=NULL
-        for name, (key_id, resolved) in ipns_keys.items():
+        for name, (ipns_name, resolved) in ipns_keys.items():
             if resolved:
                 cid = resolved.split("/")[-1]
-                click.echo(f"  {name} (IPNS): ipns://{key_id}")
+                click.echo(f"  {name} (IPNS): ipns://{ipns_name}")
                 click.echo(f"  {name} (IPFS): ipfs://{cid}")
                 if pin:
                     if _pin_cid(cid):
                         click.echo(f"  {name}: pinned")
                     else:
                         click.echo(f"  {name}: pin failed")
-                db.upsert_discovered(peer_id, key_id, name=name)
+                db.upsert_discovered(peer_id, ipns_name, name=name)
             else:
-                click.echo(f"  {name}: unresolved... (ipns://{key_id})")
-                db.upsert_discovered(peer_id, key_id, name=name)
+                click.echo(f"  {name}: unresolved... (ipns://{ipns_name})")
+                db.upsert_discovered(peer_id, ipns_name, name=name)
         click.echo()
 
 
-def _resolve_key(key_id: str) -> str | None:
-    """Resolve an IPNS key to its CID. Returns None on failure."""
+def _resolve_key(ipns_name: str) -> str | None:
+    """Resolve an IPNS name to its CID. Returns None on failure."""
     try:
-        return ipfs.name_resolve(key_id)
+        return ipfs.name_resolve(ipns_name)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
@@ -133,19 +133,19 @@ def _fetch_peer_indexes(
     return results
 
 
-def _publish_entry(name: str, dir_path: Path, key_id: str) -> str | None:
-    """Add directory and publish under IPNS key. Returns CID on success."""
+def _publish_entry(key: str, dir_path: Path, ipns_name: str) -> str | None:
+    """Add directory and publish under IPNS name. Returns CID on success."""
     if not dir_path.is_dir():
-        click.echo(f"  {name}: skipped (directory not found at {dir_path})")
+        click.echo(f"  {key}: skipped (directory not found at {dir_path})")
         return None
     try:
         cid = ipfs.add_directory(str(dir_path))
-        ipfs.name_publish(cid, key=name, ttl="1m")
-        click.echo(f"  {name}: ipns://{key_id}")
-        click.echo(f"  {name}: ipfs://{cid}")
+        ipfs.name_publish(cid, key=key, ttl="1m")
+        click.echo(f"  {key}: ipns://{ipns_name}")
+        click.echo(f"  {key}: ipfs://{cid}")
         return cid
     except subprocess.CalledProcessError:
-        click.echo(f"  {name}: failed")
+        click.echo(f"  {key}: failed")
         return None
 
 
@@ -162,10 +162,10 @@ def index() -> None:
     keys = ipfs.key_list()
     if keys:
         click.echo("Local keys:")
-        for name, key_id in keys.items():
-            display_name = "(index)" if name == "self" else name
-            path_suffix = f" ({published_paths[name]})" if name in published_paths else ""
-            click.echo(f"  {display_name}: ipns://{key_id}{path_suffix}")
+        for key, ipns_name in keys.items():
+            display_name = "(index)" if key == "self" else key
+            path_suffix = f" ({published_paths[key]})" if key in published_paths else ""
+            click.echo(f"  {display_name}: ipns://{ipns_name}{path_suffix}")
     else:
         click.echo("No local IPNS keys.")
 
@@ -185,12 +185,14 @@ def index() -> None:
             for row in rows:
                 pinned = ipfs.is_pinned(row["ipns_key"], pinned_cids)
                 pin_marker = " [pinned]" if pinned else ""
-                name = row["name"] or "(index)"
-                click.echo(f"    {name}: ipns://{row['ipns_key']}{pin_marker}")
+                key = row["name"] or "(index)"
+                click.echo(f"    {key}: ipns://{row['ipns_key']}{pin_marker}")
 
 
 @click.command()
-@click.argument("dir_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument(
+    "dir_path", type=click.Path(exists=True, file_okay=False, path_type=Path)
+)
 def add(dir_path: Path) -> None:
     """Add a directory to IPFS and publish it under an IPNS key."""
     ensure_ipfs()
@@ -210,15 +212,14 @@ def add(dir_path: Path) -> None:
 
     click.echo(f"Adding {dir_path} to IPFS...")
     cid = ipfs.add_directory(str(abs_path))
-    click.echo(f"CID: {cid}")
     click.echo(f"ipfs://{cid}")
 
     click.echo(f"Publishing under IPNS key: {key_name}...")
     ipfs.name_publish(cid, key=key_name, ttl="1m")
 
     keys = ipfs.key_list()
-    ipns_hash = keys.get(key_name, "")
-    click.echo(f"ipns://{ipns_hash}")
+    ipns_name = keys.get(key_name, "")
+    click.echo(f"ipns://{ipns_name}")
 
     db.upsert_published(str(abs_path), key_name)
 
@@ -240,15 +241,15 @@ def publish() -> None:
     # Track successfully published keys for the index
     published_keys: dict[str, str] = {}
     for entry in published:
-        name = entry["name"]
+        key = entry["name"]
         path = Path(entry["path"])
-        key_id = keys.get(name)
-        if not key_id:
-            click.echo(f"  {name}: skipped (IPNS key not found)")
+        ipns_name = keys.get(key)
+        if not ipns_name:
+            click.echo(f"  {key}: skipped (IPNS name not found)")
             continue
-        cid = _publish_entry(name, path, key_id)
+        cid = _publish_entry(key, path, ipns_name)
         if cid:
-            published_keys[name] = key_id
+            published_keys[key] = ipns_name
 
     if not published_keys:
         click.echo("No directories were published successfully.")
@@ -290,9 +291,9 @@ def _write_index_html(directory: Path, keys: dict[str, str]) -> None:
         "  <h1>IPNS Index</h1>",
         "  <ul>",
     ]
-    for name, key_id in keys.items():
+    for key_name, ipns_name in keys.items():
         lines.append(
-            f'    <li><a href="ipns://{key_id}">{name}</a> <code>{key_id}</code></li>'
+            f'    <li><a href="ipns://{ipns_name}">{key_name}</a> <code>{ipns_name}</code></li>'
         )
     lines.extend(
         [
@@ -302,5 +303,3 @@ def _write_index_html(directory: Path, keys: dict[str, str]) -> None:
         ]
     )
     (directory / "index.html").write_text("\n".join(lines) + "\n")
-
-

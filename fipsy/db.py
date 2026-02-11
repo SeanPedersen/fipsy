@@ -19,48 +19,46 @@ def init_db() -> None:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS discovered (
                 node_id TEXT NOT NULL,
-                ipns_key TEXT NOT NULL,
+                ipns_name TEXT NOT NULL,
                 name TEXT,
-                PRIMARY KEY (node_id, ipns_key)
+                PRIMARY KEY (node_id, ipns_name)
             )
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS published (
                 path TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
+                key TEXT NOT NULL,
                 added TEXT NOT NULL
             )
         """)
         conn.commit()
 
 
-def upsert_discovered(
-    node_id: str, ipns_key: str, name: str | None = None
-) -> None:
+def upsert_discovered(node_id: str, ipns_name: str, name: str | None = None) -> None:
     """Insert or update a discovered IPNS key or peer index."""
     with _get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO discovered (node_id, ipns_key, name)
+            INSERT INTO discovered (node_id, ipns_name, name)
             VALUES (?, ?, ?)
-            ON CONFLICT(node_id, ipns_key) DO UPDATE SET
+            ON CONFLICT(node_id, ipns_name) DO UPDATE SET
                 name = excluded.name
             """,
-            (node_id, ipns_key, name),
+            (node_id, ipns_name, name),
         )
         conn.commit()
 
 
 def list_discovered() -> list[dict]:
-    """List all discovered IPNS keys."""
+    """List all discovered IPNS names."""
     with _get_connection() as conn:
         rows = conn.execute(
-            "SELECT node_id, ipns_key, name FROM discovered ORDER BY node_id, name"
+            "SELECT node_id, ipns_name, name FROM discovered ORDER BY node_id, name"
         ).fetchall()
         return [dict(row) for row in rows]
 
 
-def upsert_published(path: str, name: str) -> None:
+def upsert_published(path: str, key: str) -> None:
     """Insert or update a published directory."""
     from datetime import datetime, timezone
 
@@ -68,13 +66,13 @@ def upsert_published(path: str, name: str) -> None:
     with _get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO published (path, name, added)
+            INSERT INTO published (path, key, added)
             VALUES (?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
-                name = excluded.name,
+                key = excluded.key,
                 added = excluded.added
             """,
-            (path, name, added),
+            (path, key, added),
         )
         conn.commit()
 
@@ -83,7 +81,7 @@ def list_published() -> list[dict]:
     """List all published directories."""
     with _get_connection() as conn:
         rows = conn.execute(
-            "SELECT path, name, added FROM published ORDER BY name"
+            "SELECT path, key, added FROM published ORDER BY key"
         ).fetchall()
         return [dict(row) for row in rows]
 
