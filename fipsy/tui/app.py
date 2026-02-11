@@ -18,10 +18,9 @@ from textual.widgets import (
 )
 
 from fipsy import db
+from fipsy.tui import workers
 from fipsy.tui.screens import AddDirectoryScreen, ConfirmScreen, IpfsErrorScreen
 from fipsy.tui.widgets import BrowseTable, PeerTable, PublishedTable
-from fipsy.tui import workers
-
 
 TRUNCATE_LEN = 12
 
@@ -45,7 +44,7 @@ class FipsyApp(App):
         # My Content tab
         Binding("a", "add_directory", "Add"),
         Binding("d", "remove", "Remove"),
-        Binding("shift+p", "publish_all", "Publish"),
+        Binding("p", "publish_all", "Publish"),
         # Browse tab
         Binding("o", "open_browser", "Open"),
         Binding("r", "refresh_browse", "Refresh"),
@@ -70,17 +69,29 @@ class FipsyApp(App):
         yield Header()
         with TabbedContent("Discover", "Browse", "My Content", id="tabs"):
             with TabPane("Discover", id="discover-tab"):
-                yield Static("No peers scanned yet. Press [bold]s[/] to scan.", id="network-status", classes="status-bar")
+                yield Static(
+                    "No peers scanned yet. Press [bold]s[/] to scan.",
+                    id="network-status",
+                    classes="status-bar",
+                )
                 yield PeerTable(id="peer-table")
                 with Vertical(id="scan-progress", classes="progress-container"):
                     yield ProgressBar(total=100, id="scan-bar")
 
             with TabPane("Browse", id="browse-tab"):
-                yield Static("Press [bold]r[/] to refresh.", id="browse-status", classes="status-bar")
+                yield Static(
+                    "Press [bold]r[/] to refresh.",
+                    id="browse-status",
+                    classes="status-bar",
+                )
                 yield BrowseTable(id="browse-table")
 
             with TabPane("My Content", id="content-tab"):
-                yield Static("Press [bold]a[/] to add a directory.", id="content-status", classes="status-bar")
+                yield Static(
+                    "Press [bold]a[/] to add a directory.",
+                    id="content-status",
+                    classes="status-bar",
+                )
                 yield PublishedTable(id="published-table")
                 with Vertical(id="publish-progress", classes="progress-container"):
                     yield ProgressBar(total=100, id="publish-bar")
@@ -152,7 +163,9 @@ class FipsyApp(App):
                 if item == 0:
                     self.call_from_thread(self._scan_no_peers)
                     return
-                self.call_from_thread(self._scan_update_status, f"Scanning {item} peer(s)...")
+                self.call_from_thread(
+                    self._scan_update_status, f"Scanning {item} peer(s)..."
+                )
             else:
                 self._scan_done += 1
                 pct = (self._scan_done / self._scan_total) * 100
@@ -230,9 +243,7 @@ class FipsyApp(App):
             return
         path, name = result
         self.notify(f"Adding {name}...")
-        self.run_worker(
-            lambda: self._add_worker(path, name), thread=True, group="add"
-        )
+        self.run_worker(lambda: self._add_worker(path, name), thread=True, group="add")
 
     def _add_worker(self, path: str, name: str) -> None:
         try:
@@ -288,7 +299,9 @@ class FipsyApp(App):
         status = self.query_one("#content-status", Static)
         status.update("Publishing...")
 
-        self.run_worker(self._publish_worker, thread=True, exclusive=True, group="publish")
+        self.run_worker(
+            self._publish_worker, thread=True, exclusive=True, group="publish"
+        )
 
     def _publish_worker(self) -> None:
         for item in workers.publish_all_iter():
@@ -307,9 +320,7 @@ class FipsyApp(App):
                         self.notify, f"{item.key}: {item.error}", severity="error"
                     )
                 else:
-                    self.call_from_thread(
-                        self.notify, f"Published {item.key}"
-                    )
+                    self.call_from_thread(self.notify, f"Published {item.key}")
 
                 if self._publish_total > 0:
                     pct = (self._publish_done / self._publish_total) * 100
@@ -337,7 +348,9 @@ class FipsyApp(App):
 
     # ── Browse Tab ───────────────────────────────────────────────
 
-    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+    def on_tabbed_content_tab_activated(
+        self, event: TabbedContent.TabActivated
+    ) -> None:
         self._active_tab = event.pane.id
         self.refresh_bindings()
         if event.pane.id == "browse-tab" and self._ipfs_ready:
@@ -353,7 +366,9 @@ class FipsyApp(App):
     def _refresh_browse(self) -> None:
         status = self.query_one("#browse-status", Static)
         status.update("Loading...")
-        self.run_worker(self._browse_worker, thread=True, exclusive=True, group="browse")
+        self.run_worker(
+            self._browse_worker, thread=True, exclusive=True, group="browse"
+        )
 
     def _browse_worker(self) -> None:
         entries = workers.get_browse_entries()
@@ -427,11 +442,14 @@ class FipsyApp(App):
         if success:
             self.call_from_thread(self.notify, f"Pinned {_trunc(cid)}")
         else:
-            self.call_from_thread(self.notify, f"Pin failed: {_trunc(cid)}", severity="error")
+            self.call_from_thread(
+                self.notify, f"Pin failed: {_trunc(cid)}", severity="error"
+            )
 
     def _pin_ipns_worker(self, ipns_name: str) -> None:
-        from fipsy import ipfs as _ipfs
         import subprocess
+
+        from fipsy import ipfs as _ipfs
 
         try:
             resolved = _ipfs.name_resolve(ipns_name)
@@ -439,7 +457,9 @@ class FipsyApp(App):
             _ipfs.pin_add(cid)
             self.call_from_thread(self.notify, f"Pinned {_trunc(cid)}")
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            self.call_from_thread(self.notify, f"Pin failed for {_trunc(ipns_name)}", severity="error")
+            self.call_from_thread(
+                self.notify, f"Pin failed for {_trunc(ipns_name)}", severity="error"
+            )
 
     def action_open_browser(self) -> None:
         table = self.query_one("#browse-table", BrowseTable)
