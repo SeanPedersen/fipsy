@@ -18,3 +18,7 @@ Infers IPNS_KEY from $DIR_PATH (uses name of last dir)
 ## fipsy publish
 
 This creates an index of all your local IPNS keys and makes it publicly discoverable for peers in the network.
+
+## fipsy index
+
+Show your local public index
