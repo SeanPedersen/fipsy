@@ -42,13 +42,31 @@ def scan() -> None:
 
     for peer_id, ipns_keys in results:
         click.echo(f"Peer Index: https://ipfs.io/ipns/{peer_id}")
-        for name, key_id in ipns_keys.items():
-            click.echo(f"  {name}: https://ipfs.io/ipns/{key_id}")
+        for name, (key_id, resolved) in ipns_keys.items():
+            if resolved:
+                cid = resolved.split("/")[-1]
+                click.echo(f"  {name} (IPNS): https://ipfs.io/ipns/{key_id}")
+                click.echo(f"  {name} (IPFS): https://ipfs.io/ipfs/{cid}")
+            else:
+                click.echo(f"  {name}: unresolved... (https://ipfs.io/ipns/{key_id})")
         click.echo()
 
 
-def _fetch_peer_index(peer_id: str) -> tuple[str, dict[str, str]] | None:
-    """Fetch a single peer's index.json. Returns None on failure."""
+def _resolve_key(key_id: str) -> str | None:
+    """Resolve an IPNS key to its CID. Returns None on failure."""
+    try:
+        return ipfs.name_resolve(key_id)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+
+
+def _fetch_peer_index(
+    peer_id: str,
+) -> tuple[str, dict[str, tuple[str, str | None]]] | None:
+    """Fetch a single peer's index.json and resolve IPNS keys.
+
+    Returns (peer_id, {name: (key_id, resolved_path_or_none)}) or None.
+    """
     try:
         raw = ipfs.cat_path(f"/ipns/{peer_id}/index.json")
         data = json.loads(raw)
@@ -59,15 +77,29 @@ def _fetch_peer_index(peer_id: str) -> tuple[str, dict[str, str]] | None:
     ):
         return None
 
-    ipns_keys = data.get("ipns", {})
+    ipns_keys: dict[str, str] = data.get("ipns", {})
     if not ipns_keys:
         return None
-    return (peer_id, ipns_keys)
+
+    # Resolve all IPNS keys concurrently
+    resolved: dict[str, tuple[str, str | None]] = {}
+    with ThreadPoolExecutor(max_workers=len(ipns_keys)) as pool:
+        futures = {
+            pool.submit(_resolve_key, key_id): name
+            for name, key_id in ipns_keys.items()
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            resolved[name] = (ipns_keys[name], future.result())
+
+    return (peer_id, resolved)
 
 
-def _fetch_peer_indexes(peers: list[str]) -> list[tuple[str, dict[str, str]]]:
+def _fetch_peer_indexes(
+    peers: list[str],
+) -> list[tuple[str, dict[str, tuple[str, str | None]]]]:
     """Fetch indexes from all peers concurrently."""
-    results: list[tuple[str, dict[str, str]]] = []
+    results: list[tuple[str, dict[str, tuple[str, str | None]]]] = []
     with ThreadPoolExecutor(max_workers=len(peers)) as pool:
         futures = {pool.submit(_fetch_peer_index, pid): pid for pid in peers}
         for future in as_completed(futures):

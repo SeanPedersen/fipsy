@@ -86,6 +86,14 @@ def add_directory(dir_path: str) -> str:
     return run_ipfs("add", "-r", "-Q", dir_path)
 
 
+DEFAULT_RESOLVE_TIMEOUT = 10
+
+
+def name_resolve(key_id: str, timeout: float = DEFAULT_RESOLVE_TIMEOUT) -> str:
+    """Resolve an IPNS key to its current IPFS path."""
+    return run_ipfs("name", "resolve", "--recursive", f"/ipns/{key_id}", timeout=timeout)
+
+
 def name_publish(
     cid: str,
     key: str | None = None,
