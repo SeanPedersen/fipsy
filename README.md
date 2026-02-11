@@ -13,7 +13,7 @@ ipfs daemon --enable-namesys-pubsub
 
 This creates an index of all your local IPNS keys and makes it publicly discoverable for peers in the network.
 
-Fipsy defines the content of your public IPNS self-name as a dir of index.html and index.json - containing a list of your IPNS keys + names. This allows all participants in the network to discover and browse their data via IPNS keys.
+Fipsy defines the content of your public IPNS self-name as a dir of index.html and index.json - containing a list of your IPNS keys + names. This allows all peers in a network to discover and browse their data via IPNS keys.
 
 ### fipsy add $DIR_PATH
 
