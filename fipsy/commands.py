@@ -202,11 +202,11 @@ def index() -> None:
         for node_id, rows in peers.items():
             click.echo(f"  Peer: {node_id}")
             for row in rows:
-                pinned = ipfs.is_pinned(row["ipns_key"], pinned_cids)
+                pinned = ipfs.is_pinned(row["ipns_name"], pinned_cids)
                 pin_marker = " [pinned]" if pinned else ""
                 key = row["name"] or "(index)"
                 click.echo(
-                    f"    {key}: http://ipfs.io/ipns/{row['ipns_key']}{pin_marker}"
+                    f"    {key}: http://ipfs.io/ipns/{row['ipns_name']}{pin_marker}"
                 )
 
 
