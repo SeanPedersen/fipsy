@@ -134,7 +134,8 @@ def _publish_keys(keys: dict[str, str]) -> None:
             continue
         cid = _publish_key(name, dir_path)
         if cid:
-            click.echo(f"  {name}: published ({cid[:12]}...)")
+            click.echo(f"  {name}: ipns://{key_id}")
+            click.echo(f"  {name}: ipfs://{cid}")
         else:
             click.echo(f"  {name}: failed")
 
@@ -202,18 +203,11 @@ def publish() -> None:
         _write_index_json(discovery_dir, published_keys)
         _write_index_html(discovery_dir, published_keys)
 
-        click.echo("Adding discovery index to IPFS...")
+        click.echo("Publishing discovery index under IPNS self...")
         cid = ipfs.add_directory(discovery_dir)
-        click.echo(f"CID: {cid}")
-
-        click.echo("Publishing discovery index under self...")
         ipfs.name_publish(cid, ttl="1m")
-
-        nid = ipfs.node_id()
-        click.echo("\nDiscoverable via:")
-        click.echo(f"  ipfs ls /ipns/{nid}")
-        click.echo(f"  ipfs cat /ipns/{nid}/index.json")
-        click.echo(f"  ipns://{nid}")
+        click.echo(f"  ipns://{ipfs.node_id()}")
+        click.echo(f"  ipfs://{cid}")
     finally:
         shutil.rmtree(discovery_dir, ignore_errors=True)
 
