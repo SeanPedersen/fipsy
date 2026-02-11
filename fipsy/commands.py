@@ -242,7 +242,7 @@ def publish() -> None:
     published_keys: dict[str, str] = {}
     for entry in published:
         key = entry["key"]
-        path = Path(entry["key"])
+        path = Path(entry["path"])
         ipns_name = keys.get(key)
         if not ipns_name:
             click.echo(f"  {key}: skipped (IPNS name not found)")
