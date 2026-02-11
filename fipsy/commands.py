@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import click
+from tqdm import tqdm
 
 from fipsy import db, ipfs
 
@@ -86,18 +87,20 @@ def _resolve_key(ipns_name: str) -> str | None:
 
 def _fetch_peer_index(
     peer_id: str,
+    cat_timeout: float = ipfs.DEFAULT_CAT_TIMEOUT,
 ) -> tuple[str, dict[str, tuple[str, str | None]]] | None:
     """Fetch a single peer's index.json and resolve IPNS keys.
 
     Returns (peer_id, {name: (key_id, resolved_path_or_none)}) or None.
     """
     try:
-        raw = ipfs.cat_path(f"/ipns/{peer_id}/index.json")
+        raw = ipfs.cat_path(f"/ipns/{peer_id}/index.json", timeout=cat_timeout)
         data = json.loads(raw)
     except (
         subprocess.CalledProcessError,
         subprocess.TimeoutExpired,
         json.JSONDecodeError,
+        OSError,
     ):
         return None
 
@@ -106,8 +109,9 @@ def _fetch_peer_index(
         return None
 
     # Resolve all IPNS keys concurrently
+    MAX_WORKERS = 10
     resolved: dict[str, tuple[str, str | None]] = {}
-    with ThreadPoolExecutor(max_workers=len(ipns_keys)) as pool:
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(ipns_keys))) as pool:
         futures = {
             pool.submit(_resolve_key, key_id): name
             for name, key_id in ipns_keys.items()
@@ -119,14 +123,27 @@ def _fetch_peer_index(
     return (peer_id, resolved)
 
 
+MANY_PEERS_THRESHOLD = 20
+FAST_CAT_TIMEOUT = 2.69
+
+
 def _fetch_peer_indexes(
     peers: list[str],
 ) -> list[tuple[str, dict[str, tuple[str, str | None]]]]:
     """Fetch indexes from all peers concurrently."""
+    MAX_WORKERS = 20
+    many_peers = len(peers) > MANY_PEERS_THRESHOLD
+    cat_timeout = FAST_CAT_TIMEOUT if many_peers else ipfs.DEFAULT_CAT_TIMEOUT
+
     results: list[tuple[str, dict[str, tuple[str, str | None]]]] = []
-    with ThreadPoolExecutor(max_workers=len(peers)) as pool:
-        futures = {pool.submit(_fetch_peer_index, pid): pid for pid in peers}
-        for future in as_completed(futures):
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(peers))) as pool:
+        futures = {
+            pool.submit(_fetch_peer_index, pid, cat_timeout): pid for pid in peers
+        }
+        iterator = as_completed(futures)
+        if many_peers:
+            iterator = tqdm(iterator, total=len(peers), desc="Scanning peers")
+        for future in iterator:
             result = future.result()
             if result:
                 results.append(result)
