@@ -8,7 +8,7 @@ Fipsy is a Python CLI for IPFS content sharing and discovery on local networks. 
 
 ## Tech Stack
 
-- **Python 3.13+**, **Click** (CLI framework), **uv** (package manager), **hatchling** (build)
+- **Python 3.13+**, **Click** (CLI framework), **Textual** (TUI framework), **uv** (package manager), **hatchling** (build)
 - External dependency: IPFS CLI binary must be installed and daemon running
 
 ## Commands
@@ -16,6 +16,7 @@ Fipsy is a Python CLI for IPFS content sharing and discovery on local networks. 
 ```bash
 uv sync                # Install dependencies
 uv run fipsy --help    # Run CLI
+uv run fipsy tui       # Launch TUI dashboard
 uv build               # Build distribution
 ```
 
@@ -27,10 +28,16 @@ Entry point: `fipsy.main:cli` (defined in `pyproject.toml`)
 
 ```
 fipsy/
-├── main.py       # Click group definition, registers subcommands
+├── main.py       # Click group definition, registers subcommands (incl. `tui`)
 ├── commands.py   # Subcommands (scan, add, index, publish) + business logic
 ├── ipfs.py       # Pure wrappers around `ipfs` CLI binary (no business logic)
-└── db.py         # SQLite storage for discovered IPNS keys
+├── db.py         # SQLite storage for discovered IPNS keys
+└── tui/          # Textual TUI dashboard
+    ├── app.py    # FipsyApp — main app, tab wiring, key bindings, workers
+    ├── screens.py # Modal screens (AddDirectory, Confirm, IpfsError)
+    ├── widgets.py # DataTable subclasses (PeerTable, PublishedTable, BrowseTable)
+    ├── workers.py # Business logic extracted from commands.py (returns data, no printing)
+    └── styles.tcss # Textual CSS theme
 ```
 
 **`ipfs.py`** — Stateless wrapper layer. All IPFS interaction goes through `run_ipfs()` which calls `subprocess.run`. Functions: daemon management, swarm peers, cat, key operations, add, name publish, name resolve, pin add/ls.
@@ -60,6 +67,10 @@ published (
 **Key flow — `index`**: list local keys (showing paths from `published` table) + query SQLite for discovered keys → check pinned status by resolving IPNS keys and checking against `ipfs pin ls`. Shows "(index)" for self key.
 
 **Key flow — `publish`**: read `published` table → add each directory to IPFS → publish under its IPNS key → create temp index (JSON+HTML) → add to IPFS → publish under "self" IPNS key.
+
+**`tui/workers.py`** — Same algorithms as `commands.py` but returns dataclasses (`ScanResult`, `PeerEntry`, `PublishResult`, `BrowseEntry`) instead of printing. Iterator-based `scan_peers_iter()` and `publish_all_iter()` yield results as they complete for real-time UI updates.
+
+**`tui/app.py`** — Three-tab TUI (Network, My Content, Browse). Uses `@work(thread=True)` via `run_worker()` to call blocking IPFS operations off the main thread. Results stream to UI via `call_from_thread()`. Key bindings: `s` scan, `a` add, `P` publish, `p` pin, `d` remove, `o` open browser, `r` refresh, `q` quit.
 
 ## Conventions
 

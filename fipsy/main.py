@@ -10,7 +10,16 @@ def cli() -> None:
     """Share and discover content on your local IPFS network."""
 
 
+@click.command()
+def tui() -> None:
+    """Launch the interactive TUI dashboard."""
+    from fipsy.tui.app import run
+
+    run()
+
+
 cli.add_command(scan)
 cli.add_command(index)
 cli.add_command(add)
 cli.add_command(publish)
+cli.add_command(tui)

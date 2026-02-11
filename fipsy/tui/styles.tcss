@@ -1,0 +1,119 @@
+Screen {
+    background: $surface;
+}
+
+#main-content {
+    height: 1fr;
+}
+
+TabPane {
+    padding: 1 2;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+/* Status bar at top of each tab */
+.status-bar {
+    dock: top;
+    height: 1;
+    padding: 0 1;
+    background: $primary-background;
+    color: $text;
+}
+
+/* Progress bar container */
+.progress-container {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    display: none;
+}
+
+.progress-container.visible {
+    display: block;
+}
+
+ProgressBar {
+    width: 1fr;
+}
+
+/* Footer key hints */
+.key-bar {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    background: $primary-background;
+    color: $text-muted;
+}
+
+/* Modal screens */
+AddDirectoryScreen {
+    align: center middle;
+}
+
+ConfirmScreen {
+    align: center middle;
+}
+
+IpfsErrorScreen {
+    align: center middle;
+}
+
+.modal-dialog {
+    width: 60;
+    height: auto;
+    max-height: 20;
+    border: thick $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+.modal-dialog #title {
+    text-style: bold;
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+.modal-dialog Input {
+    margin-bottom: 1;
+}
+
+.modal-dialog .button-row {
+    height: 3;
+    align: center middle;
+}
+
+.modal-dialog .button-row Button {
+    margin: 0 1;
+}
+
+/* Error screen */
+.error-dialog {
+    width: 50;
+    height: auto;
+    border: thick $error;
+    background: $surface;
+    padding: 2 3;
+}
+
+.error-dialog #error-title {
+    text-style: bold;
+    color: $error;
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+.error-dialog #error-message {
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+.error-dialog .button-row {
+    height: 3;
+    align: center middle;
+}
