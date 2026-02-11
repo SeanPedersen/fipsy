@@ -58,13 +58,13 @@ def scan(pin: bool) -> None:
         return
 
     for peer_id, ipns_keys in results:
-        click.echo(f"Peer Index: ipns://{peer_id}")
+        click.echo(f"Peer Index: ipfs.io/ipns/{peer_id}")
         db.upsert_discovered(peer_id, peer_id)  # index: key=node_id, name=NULL
         for name, (ipns_name, resolved) in ipns_keys.items():
             if resolved:
                 cid = resolved.split("/")[-1]
-                click.echo(f"  {name} (IPNS): ipns://{ipns_name}")
-                click.echo(f"  {name} (IPFS): ipfs://{cid}")
+                click.echo(f"  {name} (IPNS): ipfs.io/ipns/{ipns_name}")
+                click.echo(f"  {name} (IPFS): ipfs.io/ipfs/{cid}")
                 if pin:
                     if _pin_cid(cid):
                         click.echo(f"  {name}: pinned")
@@ -72,7 +72,7 @@ def scan(pin: bool) -> None:
                         click.echo(f"  {name}: pin failed")
                 db.upsert_discovered(peer_id, ipns_name, name=name)
             else:
-                click.echo(f"  {name}: unresolved... (ipns://{ipns_name})")
+                click.echo(f"  {name}: unresolved... (ipfs.io/ipns/{ipns_name})")
                 db.upsert_discovered(peer_id, ipns_name, name=name)
         click.echo()
 
@@ -158,8 +158,8 @@ def _publish_entry(key: str, dir_path: Path, ipns_name: str) -> str | None:
     try:
         cid = ipfs.add_directory(str(dir_path))
         ipfs.name_publish(cid, key=key, ttl="1m")
-        click.echo(f"  {key}: ipns://{ipns_name}")
-        click.echo(f"  {key}: ipfs://{cid}")
+        click.echo(f"  {key}: ipfs.io/ipns/{ipns_name}")
+        click.echo(f"  {key}: ipfs.io/ipfs/{cid}")
         return cid
     except subprocess.CalledProcessError:
         click.echo(f"  {key}: failed")
@@ -182,7 +182,7 @@ def index() -> None:
         for key, ipns_name in keys.items():
             display_name = "(index)" if key == "self" else key
             path_suffix = f" ({published_paths[key]})" if key in published_paths else ""
-            click.echo(f"  {display_name}: ipns://{ipns_name}{path_suffix}")
+            click.echo(f"  {display_name}: ipfs.io/ipns/{ipns_name}{path_suffix}")
     else:
         click.echo("No local IPNS keys.")
 
@@ -203,7 +203,7 @@ def index() -> None:
                 pinned = ipfs.is_pinned(row["ipns_key"], pinned_cids)
                 pin_marker = " [pinned]" if pinned else ""
                 key = row["name"] or "(index)"
-                click.echo(f"    {key}: ipns://{row['ipns_key']}{pin_marker}")
+                click.echo(f"    {key}: ipfs.io/ipns/{row['ipns_key']}{pin_marker}")
 
 
 @click.command()
@@ -229,14 +229,14 @@ def add(dir_path: Path) -> None:
 
     click.echo(f"Adding {dir_path} to IPFS...")
     cid = ipfs.add_directory(str(abs_path))
-    click.echo(f"ipfs://{cid}")
+    click.echo(f"ipfs.io/ipfs/{cid}")
 
     click.echo(f"Publishing under IPNS key: {key_name}...")
     ipfs.name_publish(cid, key=key_name, ttl="1m")
 
     keys = ipfs.key_list()
     ipns_name = keys.get(key_name, "")
-    click.echo(f"ipns://{ipns_name}")
+    click.echo(f"ipfs.io/ipns/{ipns_name}")
 
     db.upsert_published(str(abs_path), key_name)
 
@@ -280,8 +280,8 @@ def publish() -> None:
         click.echo("Publishing discovery index under IPNS self...")
         cid = ipfs.add_directory(str(discovery_dir))
         ipfs.name_publish(cid, ttl="1m")
-        click.echo(f"  ipns://{ipfs.node_id()}")
-        click.echo(f"  ipfs://{cid}")
+        click.echo(f"  ipfs.io/ipns/{ipfs.node_id()}")
+        click.echo(f"  ipfs.io/ipfs/{cid}")
     finally:
         shutil.rmtree(discovery_dir, ignore_errors=True)
 
@@ -310,7 +310,7 @@ def _write_index_html(directory: Path, keys: dict[str, str]) -> None:
     ]
     for key_name, ipns_name in keys.items():
         lines.append(
-            f'    <li><a href="ipns://{ipns_name}">{key_name}</a> <code>{ipns_name}</code></li>'
+            f'    <li><a href="ipfs.io/ipns/{ipns_name}">{key_name}</a> <code>{ipns_name}</code></li>'
         )
     lines.extend(
         [
