@@ -82,8 +82,8 @@ def key_gen(name: str) -> str:
 
 
 def add_directory(dir_path: str) -> str:
-    """Add directory recursively, return root CID."""
-    return run_ipfs("add", "-r", "-Q", dir_path)
+    """Add directory recursively, return root CID v1."""
+    return run_ipfs("add", "-r", "-Q", "--cid-version=1", "--raw-leaves", dir_path)
 
 
 DEFAULT_RESOLVE_TIMEOUT = 10
@@ -91,7 +91,9 @@ DEFAULT_RESOLVE_TIMEOUT = 10
 
 def name_resolve(key_id: str, timeout: float = DEFAULT_RESOLVE_TIMEOUT) -> str:
     """Resolve an IPNS key to its current IPFS path."""
-    return run_ipfs("name", "resolve", "--recursive", f"/ipns/{key_id}", timeout=timeout)
+    return run_ipfs(
+        "name", "resolve", "--recursive", f"/ipns/{key_id}", timeout=timeout
+    )
 
 
 def name_publish(
@@ -140,5 +142,3 @@ def is_pinned(ipns_key: str, pinned_cids: set[str] | None = None) -> bool:
         return cid in pinned_cids
     except Exception:
         return False
-
-
