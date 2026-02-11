@@ -488,7 +488,7 @@ class FipsyApp(App):
             self._open_directory(path)
 
     def _open_ipns(self, ipns_name: str) -> None:
-        url = f"ipns://{ipns_name}"
+        url = f"http://ipfs.io/ipns/{ipns_name}"
         webbrowser.open(url)
         self.notify(f"Opening {_trunc(ipns_name)}")
 
