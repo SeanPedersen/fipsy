@@ -43,21 +43,30 @@ discovered (
     name TEXT,                -- NULL for peer index, else key name
     PRIMARY KEY (node_id, ipns_key)
 )
+
+published (
+    path TEXT PRIMARY KEY,    -- absolute path to directory
+    name TEXT NOT NULL,       -- IPNS key name
+    added TEXT NOT NULL       -- ISO timestamp when added
+)
 ```
 
 **`commands.py`** — Business logic layer. Uses `ThreadPoolExecutor` for concurrent peer scanning and IPNS resolution. Generates JSON + HTML index files in a temp directory for the `publish` command. Filters out "self" key from published indexes.
 
 **Key flow — `scan`**: swarm_peers → concurrent `cat /ipns/{peer}/index.json` for each peer → concurrent `name resolve --recursive` for each discovered IPNS key → save to SQLite → display resolved CIDs. Use `--pin` to pin discovered content.
 
-**Key flow — `index`**: list local keys + query SQLite for discovered keys → check pinned status by resolving IPNS keys and checking against `ipfs pin ls`.
+**Key flow — `add`**: prompt for name (default: directory basename) → create IPNS key if needed → add directory to IPFS → publish under IPNS key → store path/name in `published` table.
 
-**Key flow — `publish`**: list keys → add each directory from cwd → create temp index (JSON+HTML) → add to IPFS → publish under "self" IPNS key.
+**Key flow — `index`**: list local keys (showing paths from `published` table) + query SQLite for discovered keys → check pinned status by resolving IPNS keys and checking against `ipfs pin ls`. Shows "(index)" for self key.
+
+**Key flow — `publish`**: read `published` table → add each directory to IPFS → publish under its IPNS key → create temp index (JSON+HTML) → add to IPFS → publish under "self" IPNS key.
 
 ## Conventions
 
 - IPNS records use 1-minute TTL, RSA-2048 keys
-- Directory names are used as IPNS key names
+- Directory basename is default IPNS key name, user prompted to confirm/change
 - `DEFAULT_CAT_TIMEOUT = 5s` for fetching peer content
 - `DEFAULT_RESOLVE_TIMEOUT = 10s` for IPNS resolution (DHT lookups are slow)
-- Discovered keys stored in `~/.config/fipsy/discovered.db`
+- Discovered keys and published directories stored in `~/.config/fipsy/discovered.db`
 - Pinned status is inferred from IPFS at runtime, not stored in DB
+- Path handling uses `pathlib.Path` throughout

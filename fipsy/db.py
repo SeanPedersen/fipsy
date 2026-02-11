@@ -24,6 +24,13 @@ def init_db() -> None:
                 PRIMARY KEY (node_id, ipns_key)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS published (
+                path TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                added TEXT NOT NULL
+            )
+        """)
         conn.commit()
 
 
@@ -51,3 +58,39 @@ def list_discovered() -> list[dict]:
             "SELECT node_id, ipns_key, name FROM discovered ORDER BY node_id, name"
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+def upsert_published(path: str, name: str) -> None:
+    """Insert or update a published directory."""
+    from datetime import datetime, timezone
+
+    added = datetime.now(timezone.utc).isoformat()
+    with _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO published (path, name, added)
+            VALUES (?, ?, ?)
+            ON CONFLICT(path) DO UPDATE SET
+                name = excluded.name,
+                added = excluded.added
+            """,
+            (path, name, added),
+        )
+        conn.commit()
+
+
+def list_published() -> list[dict]:
+    """List all published directories."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            "SELECT path, name, added FROM published ORDER BY name"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def delete_published(path: str) -> bool:
+    """Delete a published directory by path. Returns True if deleted."""
+    with _get_connection() as conn:
+        cursor = conn.execute("DELETE FROM published WHERE path = ?", (path,))
+        conn.commit()
+        return cursor.rowcount > 0

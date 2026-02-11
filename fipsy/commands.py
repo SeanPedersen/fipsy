@@ -1,11 +1,11 @@
 """Click subcommands for fipsy CLI."""
 
 import json
-import os
 import shutil
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import click
 
@@ -133,30 +133,20 @@ def _fetch_peer_indexes(
     return results
 
 
-def _publish_key(name: str, dir_path: str) -> str | None:
+def _publish_entry(name: str, dir_path: Path, key_id: str) -> str | None:
     """Add directory and publish under IPNS key. Returns CID on success."""
+    if not dir_path.is_dir():
+        click.echo(f"  {name}: skipped (directory not found at {dir_path})")
+        return None
     try:
-        cid = ipfs.add_directory(dir_path)
+        cid = ipfs.add_directory(str(dir_path))
         ipfs.name_publish(cid, key=name, ttl="1m")
+        click.echo(f"  {name}: ipns://{key_id}")
+        click.echo(f"  {name}: ipfs://{cid}")
         return cid
     except subprocess.CalledProcessError:
+        click.echo(f"  {name}: failed")
         return None
-
-
-def _publish_keys(keys: dict[str, str]) -> None:
-    """Publish all IPNS keys by adding their directories from cwd."""
-    cwd = os.getcwd()
-    for name, key_id in keys.items():
-        dir_path = os.path.join(cwd, name)
-        if not os.path.isdir(dir_path):
-            click.echo(f"  {name}: skipped (directory not found)")
-            continue
-        cid = _publish_key(name, dir_path)
-        if cid:
-            click.echo(f"  {name}: ipns://{key_id}")
-            click.echo(f"  {name}: ipfs://{cid}")
-        else:
-            click.echo(f"  {name}: failed")
 
 
 @click.command()
@@ -165,12 +155,17 @@ def index() -> None:
     ensure_ipfs()
     db.init_db()
 
+    # Build lookup from published table: name -> path
+    published_paths = {entry["name"]: entry["path"] for entry in db.list_published()}
+
     # Local keys
     keys = ipfs.key_list()
     if keys:
         click.echo("Local keys:")
         for name, key_id in keys.items():
-            click.echo(f"  {name}: ipns://{key_id}")
+            display_name = "(index)" if name == "self" else name
+            path_suffix = f" ({published_paths[name]})" if name in published_paths else ""
+            click.echo(f"  {display_name}: ipns://{key_id}{path_suffix}")
     else:
         click.echo("No local IPNS keys.")
 
@@ -195,14 +190,18 @@ def index() -> None:
 
 
 @click.command()
-@click.argument("dir_path", type=click.Path(exists=True, file_okay=False))
-def add(dir_path: str) -> None:
+@click.argument("dir_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+def add(dir_path: Path) -> None:
     """Add a directory to IPFS and publish it under an IPNS key."""
     ensure_ipfs()
+    db.init_db()
 
-    key_name = os.path.basename(os.path.normpath(dir_path))
-    if not key_name:
+    abs_path = dir_path.resolve()
+    default_name = abs_path.name
+    if not default_name:
         raise click.ClickException("Could not infer key name from directory path")
+
+    key_name = click.prompt("Name", default=default_name)
 
     keys = ipfs.key_list()
     if key_name not in keys:
@@ -210,7 +209,7 @@ def add(dir_path: str) -> None:
         ipfs.key_gen(key_name)
 
     click.echo(f"Adding {dir_path} to IPFS...")
-    cid = ipfs.add_directory(dir_path)
+    cid = ipfs.add_directory(str(abs_path))
     click.echo(f"CID: {cid}")
     click.echo(f"ipfs://{cid}")
 
@@ -221,30 +220,47 @@ def add(dir_path: str) -> None:
     ipns_hash = keys.get(key_name, "")
     click.echo(f"ipns://{ipns_hash}")
 
+    db.upsert_published(str(abs_path), key_name)
+
 
 @click.command()
 def publish() -> None:
     """Publish a discovery index of all your IPNS keys."""
     ensure_ipfs()
+    db.init_db()
 
-    keys = ipfs.key_list()
-    published_keys = {name: kid for name, kid in keys.items() if name != "self"}
-
-    if not published_keys:
-        click.echo("No IPNS keys found (besides self). Use `fipsy add` first.")
+    published = db.list_published()
+    if not published:
+        click.echo("No published directories. Use `fipsy add` first.")
         return
 
-    # Publish all IPNS keys by adding directories from cwd
-    click.echo(f"Publishing {len(published_keys)} IPNS key(s)...")
-    _publish_keys(published_keys)
+    keys = ipfs.key_list()
+    click.echo(f"Publishing {len(published)} directory(s)...")
 
-    discovery_dir = tempfile.mkdtemp(prefix="fipsy-index-")
+    # Track successfully published keys for the index
+    published_keys: dict[str, str] = {}
+    for entry in published:
+        name = entry["name"]
+        path = Path(entry["path"])
+        key_id = keys.get(name)
+        if not key_id:
+            click.echo(f"  {name}: skipped (IPNS key not found)")
+            continue
+        cid = _publish_entry(name, path, key_id)
+        if cid:
+            published_keys[name] = key_id
+
+    if not published_keys:
+        click.echo("No directories were published successfully.")
+        return
+
+    discovery_dir = Path(tempfile.mkdtemp(prefix="fipsy-index-"))
     try:
         _write_index_json(discovery_dir, published_keys)
         _write_index_html(discovery_dir, published_keys)
 
         click.echo("Publishing discovery index under IPNS self...")
-        cid = ipfs.add_directory(discovery_dir)
+        cid = ipfs.add_directory(str(discovery_dir))
         ipfs.name_publish(cid, ttl="1m")
         click.echo(f"  ipns://{ipfs.node_id()}")
         click.echo(f"  ipfs://{cid}")
@@ -252,14 +268,12 @@ def publish() -> None:
         shutil.rmtree(discovery_dir, ignore_errors=True)
 
 
-def _write_index_json(directory: str, keys: dict[str, str]) -> None:
+def _write_index_json(directory: Path, keys: dict[str, str]) -> None:
     data = {"ipns": keys}
-    path = os.path.join(directory, "index.json")
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+    (directory / "index.json").write_text(json.dumps(data, indent=2))
 
 
-def _write_index_html(directory: str, keys: dict[str, str]) -> None:
+def _write_index_html(directory: Path, keys: dict[str, str]) -> None:
     lines = [
         "<!doctype html>",
         "<html>",
@@ -287,8 +301,6 @@ def _write_index_html(directory: str, keys: dict[str, str]) -> None:
             "</html>",
         ]
     )
-    path = os.path.join(directory, "index.html")
-    with open(path, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    (directory / "index.html").write_text("\n".join(lines) + "\n")
 
 
